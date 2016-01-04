@@ -1,0 +1,56 @@
+<html>
+<head>
+	<link rel="stylesheet" href="style.css"></link>
+	<script src="./pouchdb-5.1.0.min.js"></script>
+	<script src="./angular-1.4.3.min.js"></script>
+	<script src="./jquery-2.1.4.min.js"></script>
+</head>
+<body ng-app="pouchDbReplicationTestApp">
+	<div id="content" ng-controller="DbController">
+		<h1>Remote</h1>
+		<table id="db-info">
+			<tr><td>URL</td><td>{{db_url}}</td></tr>
+			<tr><td>Sequence</td><td>{{db_seq}}</td></tr>
+		</table>
+		<form>
+			<fieldset>
+				<legend>Add Record</legend>
+				<label>
+					ID:
+					<input type="text" name="_id" ng-model="doc._id"/>
+				</label>
+				<input type="submit" value="save" ng-click="createNewDoc()"/>
+			</fieldset>
+		</form>
+		<table id="records">
+			<thead>
+				<tr><td>ID</td><td>rev</td>
+			</thead>
+			<tbody>
+				<tr ng-repeat="d in docs">
+					<td>{{d._id}}</td>
+					<td>{{d._rev}}</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+<script>
+var app = angular.module('pouchDbReplicationTestApp', []);
+
+app.controller('DbController', [
+    '$scope',
+    function($scope) {
+  $scope.docs = [ { _id:'A', _rev:1 }, { _id:'B', _rev:2 } ];
+
+  $scope.db_url = 'http://localhost:...';
+  $scope.db_seq = -1;
+
+  $scope.createNewDoc = function() {
+    alert('should create new doc');
+    $scope.doc = {};
+  };
+}]);	
+</script>
+</body>
+</html>
+
