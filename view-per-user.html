@@ -1,0 +1,127 @@
+<html>
+<head>
+	<link rel="stylesheet" href="style.css"></link>
+	<script src="./pouchdb-5.1.0.min.js"></script>
+	<script src="./angular-1.4.3.min.js"></script>
+	<script src="./jquery-2.1.4.min.js"></script>
+</head>
+<body ng-app="pouchDbReplicationTestApp">
+	<div id="content" ng-controller="DbController">
+		<h1 ng-class="{{status}}">View-per-user</h1>
+		<table id="db-info">
+			<tr><td>Remote DB</td><td>{{remote_db}}</td></tr>
+			<tr><td>Local DB</td><td>{{local_db}}</td></tr>
+			<tr><td>Doc count</td><td>{{docs.length}}</td></tr>
+			<tr><td>Sequence</td><td>{{local_seq}}</td></tr>
+			<tr><td>Page Load</td><td>{{page_load}}</td></tr>
+			<tr><td>Last Update</td><td>{{last_update}}</td></tr>
+		</table>
+		<form>
+			<fieldset>
+				<legend>Add Record</legend>
+				<label>
+					ID:
+					<input type="text" name="_id" ng-model="doc._id"/>
+				</label>
+				<input type="submit" value="save" ng-click="createNewDoc()"/>
+			</fieldset>
+		</form>
+		<table id="records">
+			<thead>
+				<tr><td>ID</td></tr>
+			</thead>
+			<tbody>
+				<tr ng-repeat="d in docs">
+					<td>{{d.id || d._id}}</td>
+				</tr>
+			</tbody>
+		</table>
+		<ol>
+			<li ng-repeat="e in errors">{{e}}</li>
+		</ol>
+	</div>
+<script>
+var app = angular.module('pouchDbReplicationTestApp', []);
+
+app.controller('DbController', [
+    '$scope',
+    function($scope) {
+  $scope.page_load = new Date();
+  $scope.errors = [];
+  $scope.docs = [];
+
+  $scope.remote_db = 'http://ad:pass@localhost:5984/medic';
+  $scope.local_db = 'view-per-user';
+  $scope.local_seq = -1;
+
+  $scope.createNewDoc = function() {
+    alert('should create new doc');
+    $scope.doc = {};
+  };
+
+  function dbUpdated() {
+    $scope.$apply(function() {
+      $scope.last_update = new Date();
+    });
+  }
+
+  function logError(err) {
+    dbUpdated();
+    $scope.status = 'error';
+    $scope.errors.push(err);
+  }
+
+  // set up DB and start replication
+  (function() {
+    var db = new PouchDB($scope.local_db);
+    var remote = new PouchDB($scope.remote_db);
+
+    Promise.all([db.destroy(), remote.info()])
+    .then(function(results) {
+      var info = results[1];
+      $scope.local_seq = info.update_seq;
+      $scope.$apply();
+    })
+    .then(function() {
+      dbUpdated();
+
+      remote.query('user:ad/docs')
+        .then(function(res) {
+          dbUpdated();
+	  console.log('Query complete.', res);
+          $scope.docs = res.rows;
+          var i, max_seq = -1;
+          for(i=0; i<$scope.docs.length; ++i) {
+            max_seq = Math.max(max_seq, $scope.docs[i].last_seq);
+          }
+          $scope.$apply();
+
+	  PouchDB.replicate($scope.local_db, $scope.remote_db);
+
+          PouchDB.replicate($scope.remote_db, $scope.local_db, {
+            filter: 'medic/doc_by_place',
+            query_params: { id:'eeb17d6d-5dde-c2c0-3050e81679ced9a7' },
+            batch_size: 1,
+            batch_limit: 1,
+            since: $scope.local_seq,
+          })
+          .on('change', function(info) {
+            dbUpdated();
+            console.log('Should do something with the change notification.', info);
+            $scope.docs = $scope.docs.concat(info.docs);
+            $scope.errors = $scope.errors.concat(info.errors);
+            $scope.local_seq = Math.max($scope.local_seq, info.last_seq);
+            $scope.$apply();
+          })
+          .on('complete', function() {
+            dbUpdated();
+            $scope.status = 'complete';
+          })
+          .on('error', logError);
+        })
+        .catch(logError);
+    });
+  }());
+}]);
+</script>
+</body>
