@@ -1,13 +1,29 @@
 <html>
 <head>
 	<style>
-	body { overflow:hidden; }
+	div { width:100%; }
 	iframe { height:100%; width:33%; margin:0; padding:0; border:none; }
+	.close { float:left; font-weight:bold; margin-right:1em; }
 	</style>
+	<script src="./jquery-2.1.4.min.js"></script>
 </head>
 <body>
+	<div id="instructions">
+		<p>
+If you're benchmarking, please close your Developer Tools - <i>Networking</i>,
+<i>Console</i> and other tags may significantly slow execution.
+		</p>
+	</div>
 	<iframe src="remote.html"></iframe>
 	<iframe src="standard-sync.html"></iframe>
 	<iframe src="custom-sync.html"></iframe>
+<script>
+$('#instructions p').each(function(i, e) {
+  e = $(e);
+  var close = $('<span class="close">X</span>');
+  close.click(function() { $(this).parent().hide(); });
+  e.append(close);
+});
+</script>
 </body>
 </html>

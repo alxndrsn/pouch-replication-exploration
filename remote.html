@@ -9,8 +9,10 @@
 	<div id="content" ng-controller="DbController">
 		<h1>Remote</h1>
 		<table id="db-info">
-			<tr><td>URL</td><td>{{db_url}}</td></tr>
-			<tr><td>Sequence</td><td>{{db_seq}}</td></tr>
+			<tr><td>Remote DB</td><td>{{remote_db}}</td></tr>
+			<tr><td>Local DB</td><td>{{local_db}}</td></tr>
+			<tr><td>Doc count</td><td>{{docs.length}}</td></tr>
+			<tr><td>Sequence</td><td>{{local_seq}}</td></tr>
 		</table>
 		<form>
 			<fieldset>
@@ -24,15 +26,17 @@
 		</form>
 		<table id="records">
 			<thead>
-				<tr><td>ID</td><td>rev</td>
+				<tr><td>ID</td></tr>
 			</thead>
 			<tbody>
 				<tr ng-repeat="d in docs">
-					<td>{{d._id}}</td>
-					<td>{{d._rev}}</td>
+					<td>{{d.id}}</td>
 				</tr>
 			</tbody>
 		</table>
+		<ol>
+			<li ng-repeat="e in errors">{{e}}</li>
+		</ol>
 	</div>
 <script>
 var app = angular.module('pouchDbReplicationTestApp', []);
@@ -40,17 +44,37 @@ var app = angular.module('pouchDbReplicationTestApp', []);
 app.controller('DbController', [
     '$scope',
     function($scope) {
-  $scope.docs = [ { _id:'A', _rev:1 }, { _id:'B', _rev:2 } ];
+  $scope.errors = [];
+  $scope.docs = [];
 
-  $scope.db_url = 'http://localhost:...';
-  $scope.db_seq = -1;
+  $scope.remote_db = 'http://ad:pass@localhost:5984/medic';
+  $scope.local_db = null;
+  $scope.local_seq = -1;
 
   $scope.createNewDoc = function() {
     alert('should create new doc');
     $scope.doc = {};
   };
-}]);	
+
+  function logError(err) {
+    $scope.errors.push(err);
+  }
+
+  // set up DB and start replication
+  (function() {
+    var db = new PouchDB($scope.remote_db);
+
+    db.allDocs(function(err, doc) {
+      if(err) {
+        logError(err);
+      } else {
+	console.log('Got allDocs response.', doc);
+        $scope.docs = doc.rows;
+      }
+      $scope.$apply();
+    });
+  }());
+}]);
 </script>
 </body>
 </html>
-
