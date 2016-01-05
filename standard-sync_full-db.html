@@ -7,7 +7,7 @@
 </head>
 <body ng-app="pouchDbReplicationTestApp">
 	<div id="content" ng-controller="DbController">
-		<h1>Remote</h1>
+		<h1 ng-class="{{status}}">Standard Sync (full DB)</h1>
 		<table id="db-info">
 			<tr><td>Remote DB</td><td>{{remote_db}}</td></tr>
 			<tr><td>Local DB</td><td>{{local_db}}</td></tr>
@@ -32,7 +32,7 @@
 			</thead>
 			<tbody>
 				<tr ng-repeat="d in docs">
-					<td>{{d.id}}</td>
+					<td>{{d._id}}</td>
 				</tr>
 			</tbody>
 		</table>
@@ -51,7 +51,7 @@ app.controller('DbController', [
   $scope.docs = [];
 
   $scope.remote_db = 'http://ad:pass@localhost:5984/medic';
-  $scope.local_db = null;
+  $scope.local_db = 'standard-sync';
   $scope.local_seq = -1;
 
   $scope.createNewDoc = function() {
@@ -59,23 +59,41 @@ app.controller('DbController', [
     $scope.doc = {};
   };
 
+  function dbUpdated() {
+    $scope.$apply(function() {
+      $scope.last_update = new Date();
+    });
+  }
+
   function logError(err) {
+    dbUpdated();
+    $scope.status = 'error';
     $scope.errors.push(err);
   }
 
   // set up DB and start replication
   (function() {
-    var db = new PouchDB($scope.remote_db);
+    var db = new PouchDB($scope.local_db);
 
-    db.allDocs(function(err, doc) {
-      if(err) {
-        logError(err);
-      } else {
-	console.log('Got allDocs response.', doc);
-        $scope.docs = doc.rows;
-      }
-      $scope.last_update = new Date();
-      $scope.$apply();
+    db.destroy().then(function() {
+      dbUpdated();
+      PouchDB.sync($scope.local_db, $scope.remote_db)
+        .on('change', function(info) {
+          dbUpdated();
+          console.log('Should do something with the change notification.', info);
+          if(info.direction === 'pull') {
+            info = info.change;
+            $scope.docs = $scope.docs.concat(info.docs);
+            $scope.errors = $scope.errors.concat(info.errors);
+            $scope.local_seq = Math.max($scope.local_seq, info.last_seq);
+            $scope.$apply();
+          }
+        })
+        .on('complete', function() {
+          dbUpdated();
+          $scope.status = 'complete';
+        })
+        .on('error', logError);
     });
   }());
 }]);

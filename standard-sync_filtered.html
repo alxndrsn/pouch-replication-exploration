@@ -7,12 +7,14 @@
 </head>
 <body ng-app="pouchDbReplicationTestApp">
 	<div id="content" ng-controller="DbController">
-		<h1>Standard Sync</h1>
+		<h1 ng-class="{{status}}">Standard Sync (filtered)</h1>
 		<table id="db-info">
 			<tr><td>Remote DB</td><td>{{remote_db}}</td></tr>
 			<tr><td>Local DB</td><td>{{local_db}}</td></tr>
 			<tr><td>Doc count</td><td>{{docs.length}}</td></tr>
 			<tr><td>Sequence</td><td>{{local_seq}}</td></tr>
+			<tr><td>Page Load</td><td>{{page_load}}</td></tr>
+			<tr><td>Last Update</td><td>{{last_update}}</td></tr>
 		</table>
 		<form>
 			<fieldset>
@@ -44,6 +46,7 @@ var app = angular.module('pouchDbReplicationTestApp', []);
 app.controller('DbController', [
     '$scope',
     function($scope) {
+  $scope.page_load = new Date();
   $scope.errors = [];
   $scope.docs = [];
 
@@ -56,7 +59,15 @@ app.controller('DbController', [
     $scope.doc = {};
   };
 
+  function dbUpdated() {
+    $scope.$apply(function() {
+      $scope.last_update = new Date();
+    });
+  }
+
   function logError(err) {
+    dbUpdated();
+    $scope.status = 'error';
     $scope.errors.push(err);
   }
 
@@ -65,22 +76,31 @@ app.controller('DbController', [
     var db = new PouchDB($scope.local_db);
 
     db.destroy().then(function() {
-      PouchDB.sync($scope.local_db, $scope.remote_db)
+      dbUpdated();
+      PouchDB.replicate($scope.local_db, $scope.remote_db, {
+      });
+      PouchDB.replicate($scope.remote_db, $scope.local_db, {
+        filter: 'medic/doc_by_place',
+        query_params: { id:'eeb17d6d-5dde-c2c0-3050e81679ced9a7' },
+        batch_size: 1,
+        batch_limit: 1,
+      })
         .on('change', function(info) {
+          dbUpdated();
           console.log('Should do something with the change notification.', info);
-          if(info.direction === 'pull') {
-            info = info.change;
-            $scope.docs = $scope.docs.concat(info.docs);
-            $scope.errors = $scope.errors.concat(info.errors);
-            $scope.local_seq = Math.max($scope.local_seq, info.last_seq);
-            $scope.$apply();
-          }
+          $scope.docs = $scope.docs.concat(info.docs);
+          $scope.errors = $scope.errors.concat(info.errors);
+          $scope.local_seq = Math.max($scope.local_seq, info.last_seq);
+          $scope.$apply();
+        })
+        .on('complete', function() {
+          dbUpdated();
+          $scope.status = 'complete';
         })
         .on('error', logError);
     });
   }());
-}]);	
+}]);
 </script>
 </body>
 </html>
-

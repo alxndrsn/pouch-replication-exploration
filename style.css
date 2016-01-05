@@ -2,3 +2,9 @@ body {
 }
 #content {
 }
+h1.error {
+	background-color: red;
+}
+h1.complete {
+	background-color: lime;
+}
