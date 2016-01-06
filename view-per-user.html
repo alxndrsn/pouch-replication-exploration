@@ -1,138 +1,19 @@
 <html>
-<head>
-	<link rel="stylesheet" href="style.css"></link>
-	<script src="./pouchdb-5.1.0.min.js"></script>
-	<script src="./angular-1.4.3.min.js"></script>
-	<script src="./jquery-2.1.4.min.js"></script>
-</head>
-<body ng-app="pouchDbReplicationTestApp">
-	<div id="content" ng-controller="DbController">
-		<h1 ng-class="{{status}}">View-per-user</h1>
-		<ol>
-			<li ng-repeat="e in errors">{{e}}</li>
-		</ol>
-		<table id="db-info">
-			<tr><td>Remote DB</td><td>{{remote_db}}</td></tr>
-			<tr><td>Local DB</td><td>{{local_db}}</td></tr>
-			<tr><td>Doc count</td><td>{{docs.length}}</td></tr>
-			<tr><td>Sequence</td><td>{{local_seq}}</td></tr>
-			<tr><td>Page Load</td><td>{{page_load}}</td></tr>
-			<tr><td>Last Update</td><td>{{last_update}}</td></tr>
-		</table>
-		<form>
-			<fieldset>
-				<legend>Add Record</legend>
-				<label>
-					ID:
-					<input type="text" name="_id" ng-model="doc._id"/>
-				</label>
-				<input type="submit" value="save" ng-click="createNewDoc()"/>
-			</fieldset>
-		</form>
-		<table id="records">
-			<thead>
-				<tr><td>ID</td></tr>
-			</thead>
-			<tbody>
-				<tr ng-repeat="d in docs">
-					<td>{{d.id || d._id}}</td>
-				</tr>
-			</tbody>
-		</table>
-	</div>
-<script>
-var app = angular.module('pouchDbReplicationTestApp', []);
-
-app.controller('DbController', [
-    '$scope',
-    function($scope) {
-  $scope.page_load = new Date();
-  $scope.errors = [];
-  $scope.docs = [];
-
-  $scope.remote_db = 'http://ad:pass@localhost:5984/medic';
-  $scope.local_db = 'view-per-user';
-  $scope.local_seq = -1;
-
-  $scope.createNewDoc = function() {
-    alert('should create new doc');
-    $scope.doc = {};
-  };
-
-  function dbUpdated() {
-    $scope.$apply(function() {
-      $scope.last_update = new Date();
-    });
-  }
-
-  function logError(err) {
-    console.log('logError', err);
-    dbUpdated();
-    $scope.status = 'error';
-    $scope.errors.push(err);
-  }
-
-  // set up DB and start replication
-  (function() {
-    var db = new PouchDB($scope.local_db);
-    var remote = new PouchDB($scope.remote_db);
-
-    Promise.all([db.destroy(), remote.info()])
-    .then(function(results) {
-      var info = results[1];
-      $scope.local_seq = info.update_seq;
-      $scope.$apply();
-    })
-    .then(function() {
-      dbUpdated();
-
-      remote.query('user:ad/docs', { include_docs:true, attachments:true })
-        .then(function(res) {
-          dbUpdated();
-          console.log('Query complete.', res);
-          var saves = [];
-          var i, doc;
-          for(i=0; i<res.rows.length; ++i) {
-            doc = res.rows[i].doc;
-            $scope.docs.push(doc);
-            console.log('Putting.', doc);
-            var save = db.put(doc);
-            save.catch(logError);
-            saves.push(save);
-          }
-          $scope.$apply();
-
-          window.saves = saves;
-
-          Promise.all(saves).then(function() {
-            PouchDB.replicate($scope.local_db, $scope.remote_db);
-
-            PouchDB.replicate($scope.remote_db, $scope.local_db, {
-              filter: 'medic/doc_by_place',
-              query_params: { id:'eeb17d6d-5dde-c2c0-3050e81679ced9a7' },
-              batch_size: 1,
-              batch_limit: 1,
-              since: $scope.local_seq,
-            })
-            .on('change', function(info) {
-              dbUpdated();
-              console.log('Should do something with the change notification.', info);
-              $scope.docs = $scope.docs.concat(info.docs);
-              $scope.errors = $scope.errors.concat(info.errors);
-              $scope.local_seq = Math.max($scope.local_seq, info.last_seq);
-              $scope.$apply();
-            })
-            .on('complete', function() {
-              dbUpdated();
-              $scope.status = 'complete';
-            })
-            .on('error', logError);
-          })
-          .catch(logError);
+  <head>
+    <script src="//cdn.jsdelivr.net/pouchdb/5.1.0/pouchdb.min.js"></script>
+  </head>
+  <body>
+    <div><h1>check the console</h1></div>
+    <script>
+      var db = new PouchDB('test-db');
+      db.destroy()
+        .then(function() {
+          db = new PouchDB('test-db'); // Remove this line to demonstrate the bug
+          db.post({})
+            .then(function(res) { console.log('post-success', res); })
+            .catch(function(res) { console.log('post-failure', res); });
         })
-        .catch(logError);
-    });
-  }());
-}]);
-</script>
-</body>
+        .catch(function(res) { console.log('destroy-failure', res); });
+    </script>
+  </body>
+</html>
