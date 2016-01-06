@@ -8,6 +8,9 @@
 <body ng-app="pouchDbReplicationTestApp">
 	<div id="content" ng-controller="DbController">
 		<h1 ng-class="{{status}}">View-per-user</h1>
+		<ol>
+			<li ng-repeat="e in errors">{{e}}</li>
+		</ol>
 		<table id="db-info">
 			<tr><td>Remote DB</td><td>{{remote_db}}</td></tr>
 			<tr><td>Local DB</td><td>{{local_db}}</td></tr>
@@ -36,9 +39,6 @@
 				</tr>
 			</tbody>
 		</table>
-		<ol>
-			<li ng-repeat="e in errors">{{e}}</li>
-		</ol>
 	</div>
 <script>
 var app = angular.module('pouchDbReplicationTestApp', []);
@@ -66,6 +66,7 @@ app.controller('DbController', [
   }
 
   function logError(err) {
+    console.log('logError', err);
     dbUpdated();
     $scope.status = 'error';
     $scope.errors.push(err);
@@ -85,18 +86,23 @@ app.controller('DbController', [
     .then(function() {
       dbUpdated();
 
-      remote.query('user:ad/docs')
+      remote.query('user:ad/docs', { include_docs:true, attachments:true })
         .then(function(res) {
           dbUpdated();
           console.log('Query complete.', res);
-          $scope.docs = res.rows;
           var saves = [];
           var i, doc;
-          for(i=0; i<$scope.docs.length; ++i) {
-            doc = $scope.docs[i];
-            saves.push(local.put(doc));
+          for(i=0; i<res.rows.length; ++i) {
+            doc = res.rows[i].doc;
+            $scope.docs.push(doc);
+            console.log('Putting.', doc);
+            var save = db.put(doc);
+            save.catch(logError);
+            saves.push(save);
           }
           $scope.$apply();
+
+          window.saves = saves;
 
           Promise.all(saves).then(function() {
             PouchDB.replicate($scope.local_db, $scope.remote_db);
